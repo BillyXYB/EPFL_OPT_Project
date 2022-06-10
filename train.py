@@ -75,7 +75,7 @@ class Asynchronous_Simulator():
         for key, value, param in zip(server_dict.keys(), server_dict.values(), self.workers[worker_idx].parameters()):
             server_dict[key] = value - lr*param.grad
 
-        
+
         self.para_server.load_state_dict(server_dict)# .to(self.device)
         self.workers[worker_idx] = copy.deepcopy(self.para_server)
         
