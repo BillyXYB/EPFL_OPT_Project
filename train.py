@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 import copy
+import models as models
+
 
 
 class Net(nn.Module):
@@ -29,7 +31,7 @@ class Net(nn.Module):
 
 
 class Asynchronous_Simulator():
-    def __init__(self, num_workers=3, batch_size = 4):
+    def __init__(self, num_workers=3, batch_size = 4, model_name='small'):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.transform = transforms.Compose(
@@ -52,10 +54,12 @@ class Asynchronous_Simulator():
                 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
         
         self.num_workers = num_workers
-        self.init_simulator()
+        self.init_simulator(model_name)
 
 
-    def init_simulator(self, ):
+    def init_simulator(self, model_name):
+        
+        Net = getattr(models, model_name)
         self.para_server = Net().to(self.device)
         workers = []
 
@@ -71,10 +75,13 @@ class Asynchronous_Simulator():
         """
         for param, grad in zip(self.para_server.parameters(),self.workers[worker_idx].parameters()):
                 param.data.sub_(grad.grad * lr)
-        """
+        
         for key, value, param in zip(server_dict.keys(), server_dict.values(), self.workers[worker_idx].parameters()):
             server_dict[key] = value - lr*param.grad
+        """
 
+        for name, param in self.workers[worker_idx].named_parameters():
+            server_dict[name] = server_dict[name] - lr*param.grad
 
         self.para_server.load_state_dict(server_dict)# .to(self.device)
         self.workers[worker_idx] = copy.deepcopy(self.para_server)
@@ -111,7 +118,7 @@ class Asynchronous_Simulator():
             for data in self.testloader:
                 images, labels = data
                 images = images.to(self.device)
-                labels = labels.to(self.device)
+                
                 # calculate outputs by running images through the network
                 outputs = self.para_server(images)
                 # the class with the highest energy is what we choose as prediction
@@ -120,3 +127,4 @@ class Asynchronous_Simulator():
                 correct += (predicted == labels).sum().item()
 
             print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+
