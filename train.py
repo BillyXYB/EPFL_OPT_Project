@@ -110,6 +110,8 @@ class Asynchronous_Simulator():
         with torch.no_grad():
             for data in self.testloader:
                 images, labels = data
+                images = images.to(self.device)
+                labels = labels.to(self.device)
                 # calculate outputs by running images through the network
                 outputs = self.para_server(images)
                 # the class with the highest energy is what we choose as prediction
