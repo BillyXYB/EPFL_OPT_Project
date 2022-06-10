@@ -35,7 +35,7 @@ class Asynchronous_Simulator():
         
         self.num_workers = num_workers
         self.init_simulator(model_name)
-
+        self.momentum = None
 
     def init_simulator(self, model_name):
         
@@ -50,7 +50,7 @@ class Asynchronous_Simulator():
 
         self.workers = workers
 
-    def SGD(self, worker_idx, lr, decay=False, epoch=1, decay_rate = 2):
+    def SGD(self, worker_idx, lr, decay=False, epoch=1, decay_rate = 2, momentum=0, dampening = 0):
         server_dict = self.para_server.state_dict()
         """
         for param, grad in zip(self.para_server.parameters(),self.workers[worker_idx].parameters()):
@@ -61,14 +61,27 @@ class Asynchronous_Simulator():
         """
         if decay:
             lr = lr/decay_rate**epoch
+        if momentum:
+            if self.momentum is None:
+                momentum_dict = {}
+                for name, param in self.workers[worker_idx].named_parameters():
+                    momentum_dict[name] = param.grad
+                self.momentum = momentum_dict
+            else:
+                for name, param in self.workers[worker_idx].named_parameters():
+                    self.momentum[name] = momentum * self.momentum[name] + (1-dampening)*param.grad
+
         for name, param in self.workers[worker_idx].named_parameters():
-            server_dict[name] = server_dict[name] - lr*param.grad
+            if not momentum:
+                server_dict[name] = server_dict[name] - lr * param.grad
+            else:
+                server_dict[name] = server_dict[name] - lr*self.momentum[name]
 
         self.para_server.load_state_dict(server_dict)# .to(self.device)
         self.workers[worker_idx] = copy.deepcopy(self.para_server)
         
 
-    def train(self, max_epoch = 2, lr = 0.001, method='SGD'):
+    def train(self, max_epoch = 2, lr = 0.001, method='SGD', decay_rate = 0, momentum=0, dampening = 0):
         # for epoch in tqdm(range(max_epoch)):
             # dataiter = iter(self.trainloader)
         loss_list = []
@@ -91,10 +104,10 @@ class Asynchronous_Simulator():
                 running_loss += loss.item()
                 if i % 2000 == 1999:    # print every 2000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
-                    loss_list.append(running_loss)
+                    loss_list.append(running_loss/2000)
                     running_loss = 0.0
                 if i % 2000 == 1999:    # print every 2000 mini-batches
-                    acc = self.test
+                    acc = self.test()
                     acc_list.append(acc)
         return loss_list, acc_list
         
