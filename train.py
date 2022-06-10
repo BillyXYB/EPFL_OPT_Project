@@ -10,26 +10,6 @@ import models as models
 
 
 
-class Net(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
-
-    def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
 class Asynchronous_Simulator():
     def __init__(self, num_workers=3, batch_size = 4, model_name='small'):
         super().__init__()
@@ -70,7 +50,7 @@ class Asynchronous_Simulator():
 
         self.workers = workers
 
-    def SGD(self, worker_idx, lr):
+    def SGD(self, worker_idx, lr, decay=False, epoch=1, decay_rate = 2):
         server_dict = self.para_server.state_dict()
         """
         for param, grad in zip(self.para_server.parameters(),self.workers[worker_idx].parameters()):
@@ -79,7 +59,8 @@ class Asynchronous_Simulator():
         for key, value, param in zip(server_dict.keys(), server_dict.values(), self.workers[worker_idx].parameters()):
             server_dict[key] = value - lr*param.grad
         """
-
+        if decay:
+            lr = lr/decay_rate**epoch
         for name, param in self.workers[worker_idx].named_parameters():
             server_dict[name] = server_dict[name] - lr*param.grad
 
@@ -87,13 +68,15 @@ class Asynchronous_Simulator():
         self.workers[worker_idx] = copy.deepcopy(self.para_server)
         
 
-    def train(self, max_epoch = 2, lr = 0.001):
+    def train(self, max_epoch = 2, lr = 0.001, method='SGD'):
         # for epoch in tqdm(range(max_epoch)):
             # dataiter = iter(self.trainloader)
+        loss_list = []
+        acc_list = []
         for epoch in range(max_epoch):
             running_loss = 0.0
             for i, data in tqdm(enumerate(self.trainloader, 0)):
-  
+                
                 worker_dix = i%self.num_workers
                 images, labels = data
                 images = images.to(self.device)
@@ -104,11 +87,16 @@ class Asynchronous_Simulator():
                 criterion = nn.CrossEntropyLoss()
                 loss = criterion(outputs, labels)
                 loss.backward()
-                self.SGD(worker_idx=worker_dix, lr=lr)
+                self.SGD(worker_idx=worker_dix, lr=lr, epoch=epoch)
                 running_loss += loss.item()
                 if i % 2000 == 1999:    # print every 2000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
+                    loss_list.append(running_loss)
                     running_loss = 0.0
+                if i % 2000 == 1999:    # print every 2000 mini-batches
+                    acc = self.test
+                    acc_list.append(acc)
+        return loss_list, acc_list
         
     def test(self,):
         correct = 0
@@ -125,6 +113,7 @@ class Asynchronous_Simulator():
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
-
+            acc = correct/total
             print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
-
+        
+        return acc
