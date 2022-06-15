@@ -59,6 +59,9 @@ class Asynchronous_Simulator():
         for key, value, param in zip(server_dict.keys(), server_dict.values(), self.workers[worker_idx].parameters()):
             server_dict[key] = value - lr*param.grad
         """
+        # lr_list = [0.02, 0.01, 0.005, 0.002, 0.001, 0.0005] # for regular sgd and dropout
+        # lr_list = [0.001, 0.001, 0.0005, 0.0005, 0.0002, 0.0001] # for momentum
+        lr = lr_list[epoch]
         if decay:
             lr = lr/decay_rate**epoch
         if momentum:
@@ -81,7 +84,7 @@ class Asynchronous_Simulator():
         self.workers[worker_idx] = copy.deepcopy(self.para_server)
         
 
-    def train(self, max_epoch = 2, lr = 0.001, method='SGD', decay_rate = 0, momentum=0, dampening = 0):
+    def train(self, max_epoch = 6, lr = 0.001, method='SGD', decay_rate = 0, momentum=0, dampening = 0):
         # for epoch in tqdm(range(max_epoch)):
             # dataiter = iter(self.trainloader)
         loss_list = []
@@ -100,7 +103,7 @@ class Asynchronous_Simulator():
                 criterion = nn.CrossEntropyLoss()
                 loss = criterion(outputs, labels)
                 loss.backward()
-                self.SGD(worker_idx=worker_dix, lr=lr, epoch=epoch)
+                self.SGD(worker_idx=worker_dix, lr=lr, epoch=epoch, momentum=momentum)
                 running_loss += loss.item()
                 if i % 2000 == 1999:    # print every 2000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
