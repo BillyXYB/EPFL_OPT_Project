@@ -15,3 +15,16 @@ test_as.train(lr=0.01)
 ```
 test_as.test()
 ```
+### Adding momentum to ASGD
+```
+test_as = Asynchronous_Simulator(num_workers=1, model_name='small')
+test_as.train(max_epoch=2, lr = 0.01, momentum = 0.9)
+test_as.test()
+```
+### SGD+dropout
+example dropout rate = 0.5
+```
+test_as = Asynchronous_Simulator(num_workers=1, model_name="small_drop_5")
+test_as.train(max_epoch=2, lr = 0.01)
+test_as.test()
+```
